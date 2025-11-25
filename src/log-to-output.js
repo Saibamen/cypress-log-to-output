@@ -3,6 +3,7 @@ const chalk = require('chalk')
 
 let eventFilter
 let recordLogs
+let displayFilter
 
 let messageLog = [];
 
@@ -46,12 +47,20 @@ function logEntry(params) {
   const prefixSpacer = ' '.repeat(prefix.length)
 
   let logMessage = `${prefix}${chalk.bold(level)} (${source}): ${text}`;
-  log(color(logMessage));
+
+  const shouldDisplay = !displayFilter || displayFilter('browser', params.entry);
+  if (shouldDisplay) {
+    log(color(logMessage));
+  }
+
   recordLogMessage(logMessage);
 
   const logAdditional = (msg) => {
     let additionalLogMessage = `${prefixSpacer}${msg}`;
-    log(color(additionalLogMessage));
+    if (shouldDisplay) {
+      log(color(additionalLogMessage));
+    }
+
     recordLogMessage(additionalLogMessage);
   };
 
@@ -85,12 +94,20 @@ function logConsole(params) {
   const prefixSpacer = ' '.repeat(prefix.length)
 
   let logMessage = `${prefix}${chalk.bold(`console.${type}`)} called`;
-  log(color(logMessage));
+
+  const shouldDisplay = !displayFilter || displayFilter('console', params);
+  if (shouldDisplay) {
+    log(color(logMessage));
+  }
+
   recordLogMessage(logMessage);
 
   const logAdditional = (msg) => {
     let logMessage = `${prefixSpacer}${msg}`;
-    log(color(logMessage));
+    if (shouldDisplay) {
+      log(color(logMessage));
+    }
+
     recordLogMessage(logMessage);
   };
 
@@ -103,6 +120,7 @@ function logConsole(params) {
 function install(on, filter, options = {}) {
   eventFilter = filter;
   recordLogs = options.recordLogs;
+  displayFilter = options.displayFilter;
   on('before:browser:launch', browserLaunchHandler)
 }
 
