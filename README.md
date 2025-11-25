@@ -63,6 +63,7 @@ module.exports = (on, config) => {
 ## Filtering Display Output
 
 If you want to control which events are displayed in the terminal separately from which events are recorded (when using `recordLogs`), you can use the `displayFilter` option:
+
 ```js
 module.exports = (on, config) => {
   /** the rest of your plugins... **/
