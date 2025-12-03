@@ -3,7 +3,18 @@ const chalk = require('chalk')
 
 let eventFilter
 let recordLogs
+let displayFilter
 
+/**
+ * @typedef {Object} LogEntry
+ * @property {'browser'|'console'} type - Type of log entry
+ * @property {string} level - Severity level (error, warning, info, verbose)
+ * @property {string} [source] - Source of the log (e.g., 'network', 'javascript') - only for browser logs
+ * @property {string} message - Formatted log message
+ * @property {number} timestamp - Timestamp of the log
+ */
+
+/** @type {LogEntry[]} */
 let messageLog = [];
 
 const severityColors = {
@@ -46,29 +57,41 @@ function logEntry(params) {
   const prefixSpacer = ' '.repeat(prefix.length)
 
   let logMessage = `${prefix}${chalk.bold(level)} (${source}): ${text}`;
-  log(color(logMessage));
-  recordLogMessage(logMessage);
 
-  const logAdditional = (msg) => {
-    let additionalLogMessage = `${prefixSpacer}${msg}`;
-    log(color(additionalLogMessage));
-    recordLogMessage(additionalLogMessage);
-  };
+  const shouldDisplay = !displayFilter || displayFilter('browser', params.entry);
+  if (shouldDisplay) {
+    log(color(logMessage));
+  }
 
+  // Build additional message parts
+  const additionalParts = [];
   if (url) {
-    logAdditional(`${chalk.bold('URL')}: ${url}`)
+    additionalParts.push(`${prefixSpacer}${chalk.bold('URL')}: ${url}`);
   }
-
   if (stackTrace && lineNumber) {
-    logAdditional(`Stack trace line number: ${lineNumber}`)
-    logAdditional(`Stack trace description: ${stackTrace.description}`)
-    logAdditional(`Stack call frames: ${stackTrace.callFrames.join(', ')}`)
+    additionalParts.push(`${prefixSpacer}Stack trace line number: ${lineNumber}`);
+    additionalParts.push(`${prefixSpacer}Stack trace description: ${stackTrace.description}`);
+    additionalParts.push(`${prefixSpacer}Stack call frames: ${stackTrace.callFrames.join(', ')}`);
+  }
+  if (args) {
+    additionalParts.push(`${prefixSpacer}Arguments:`);
+    additionalParts.push(`${prefixSpacer}  ` + JSON.stringify(args, null, 2).split('\n').join(`\n${prefixSpacer}  `).trimRight());
   }
 
-  if (args) {
-    logAdditional(`Arguments:`)
-    logAdditional('  ' + JSON.stringify(args, null, 2).split('\n').join(`\n${prefixSpacer}  `).trimRight())
+  // Display additional parts
+  if (shouldDisplay) {
+    additionalParts.forEach(part => log(color(part)));
   }
+
+  // Record structured log entry
+  const fullMessage = [logMessage, ...additionalParts].join('\n');
+  recordLogEntry({
+    type: 'browser',
+    level,
+    source,
+    message: fullMessage,
+    timestamp
+  });
 }
 
 function logConsole(params) {
@@ -85,33 +108,56 @@ function logConsole(params) {
   const prefixSpacer = ' '.repeat(prefix.length)
 
   let logMessage = `${prefix}${chalk.bold(`console.${type}`)} called`;
-  log(color(logMessage));
-  recordLogMessage(logMessage);
 
-  const logAdditional = (msg) => {
-    let logMessage = `${prefixSpacer}${msg}`;
+  const shouldDisplay = !displayFilter || displayFilter('console', params);
+  if (shouldDisplay) {
     log(color(logMessage));
-    recordLogMessage(logMessage);
-  };
-
-  if (args) {
-    logAdditional(`Arguments:`)
-    logAdditional('  ' + JSON.stringify(args, null, 2).split('\n').join(`\n${prefixSpacer}  `).trimRight())
   }
+
+  // Build additional message parts
+  const additionalParts = [];
+  if (args) {
+    additionalParts.push(`${prefixSpacer}Arguments:`);
+    additionalParts.push(`${prefixSpacer}  ` + JSON.stringify(args, null, 2).split('\n').join(`\n${prefixSpacer}  `).trimRight());
+  }
+
+  // Display additional parts
+  if (shouldDisplay) {
+    additionalParts.forEach(part => log(color(part)));
+  }
+
+  // Record structured log entry
+  const fullMessage = [logMessage, ...additionalParts].join('\n');
+  recordLogEntry({
+    type: 'console',
+    level,
+    source: 'console',
+    message: fullMessage,
+    timestamp
+  });
 }
 
 function install(on, filter, options = {}) {
   eventFilter = filter;
   recordLogs = options.recordLogs;
+  displayFilter = options.displayFilter;
   on('before:browser:launch', browserLaunchHandler)
 }
 
-function recordLogMessage(logMessage) {
+/**
+ * Records a structured log entry
+ * @param {LogEntry} entry
+ */
+function recordLogEntry(entry) {
   if (recordLogs) {
-    messageLog.push(logMessage);
+    messageLog.push(entry);
   }
 }
 
+/**
+ * Returns all recorded log entries with level and source for filtering
+ * @returns {LogEntry[]}
+ */
 function getLogs() {
   return messageLog;
 }
